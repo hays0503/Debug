@@ -41,7 +41,7 @@ class InfoInController:
 # Корневые объекты
 
 # Абстракция один конвертер множество контролеров
-ConverterIronLogic = ConverterInstance
+ConverterIronLogic = ConverterInstance('./ControllerIronLogic.dll')
 
 # Старая реализация для проверки (рефакториться)
 Controller = InfoInController()
@@ -54,6 +54,8 @@ appSender = web.Application()
 app = web.Application()
 # Web - часть
 message_queue = queue.Queue()
+
+BASE_URL = 'http://192.168.0.129:8000'
 
 #####################################################################################
 
@@ -141,25 +143,22 @@ def SendPost(urls, Events):
 
 def InitMiddleware():
 
-    Controller.ControllerApi = IronLogicControllerApi(
-        './ControllerIronLogic.dll')
     ################################################################
-    # Подготовка первого контролера
+    # Создание первого контролера
     ################################################################
-    Controller.EventIndexInControllerV1 = Controller.ControllerApi.Do_Ctr_Events_Menu(
-        1, -1)
-    Controller.ControllerApi.Update_Bank_Key(0)
-    SendPost(urls='http://192.168.0.129:8000',
-             Events=Build_Message(type="Z5R Net 8000", sn=4232, Messages=POWER_ON()))
+    ConverterIronLogic.AddNewController(1, 4232, "Z5R Net 8000", 1)
+    ConverterIronLogic.AddNewController(2, 4225, "Z5R Net 8000", 1)
     ################################################################
-    # Подготовка второго контролера
+    # Подготовка контролеров
     ################################################################
-    Controller.EventIndexInControllerV2 = Controller.ControllerApi.Do_Ctr_Events_Menu(
-        2, -1)
-    Controller.ControllerApi.Update_Bank_Key(0)
-    SendPost(urls='http://192.168.0.129:8000',
-             Events=Build_Message(type="Z5R Net 8000", sn=4225, Messages=POWER_ON()))
-    ################################################################
+    # Пробегаем по каждому инициализируем внутренне состояния (dll-кишков)
+    # а также смотрим какой последний был индекс события
+    for Controller in ConverterIronLogic._Controllers:
+        ConverterIronLogic.EventsIterator = ConverterIronLogic.ControllerApi.Do_Ctr_Events_Menu(
+            Controller.AddressNumber, -1)
+        ConverterIronLogic.ControllerApi.Update_Bank_Key(Controller.Banks)
+        SendPost(urls=BASE_URL, Events=Controller.POWER_ON())
+
 
 ##########################################
 # Функция для отправки сообщений в очередь
