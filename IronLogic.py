@@ -109,8 +109,8 @@ async def get_http_response(urls, Events) -> dict:
         print("\n\nresponses ====>", responses,
               "type(responses) ======>", type(responses))
         # print("\nresponses.content ====>", responses[0].content.readany())
-        async for line in responses[0].content:
-            print(line)
+        # async for line in responses[0].content:
+        #     print("\nprint(line) = >", line)
     return f'Exit in func => get_http_response()'
 #####################################################################################
 
@@ -180,7 +180,7 @@ def MainMiddleware():
             # Пробегаем по каждому контролеру если контролер
             # на данный момент активен переключаем контекст
             # обработки и опрашиваем на новые события
-            for _index ,_Controller in enumerate(ConverterIronLogic._Controllers):
+            for _index, _Controller in enumerate(ConverterIronLogic._Controllers):
 
                 if (_Controller.Active == ModeController.ACTIVE):
 
@@ -220,7 +220,7 @@ def MainMiddleware():
                             if messages["events"] != []:
                                 Check_access = {
                                     "type": Events["type"],
-                                    "sn": Events["sn"],
+                                    "sn": _Controller.SerialNumber,
                                     "messages": [
                                         {
                                             "id": 1,
@@ -351,10 +351,10 @@ def RunResponse(sn: int, body: any):
     # ConverterIronLogic является глобальной переменой для класса используется для синхронизации данных между потоков
     global ConverterIronLogic
     print("\n\n\nsn =>", sn)
-    print(body['operation'])
+    print("\nprint(body['operation']) =>", body['operation'])
     ################################################################
     # Если серийник с таким то номером то совершаем некоторые действия
-    for _index ,_Controller in enumerate(ConverterIronLogic._Controllers):
+    for _index, _Controller in enumerate(ConverterIronLogic._Controllers):
         # Если серийник не совпадает с адресом который был в запросе то пропускаем итерацию
         if (sn != _Controller.SerialNumber):
             continue
@@ -370,7 +370,9 @@ def RunResponse(sn: int, body: any):
         # Установка режима контролера(перепроверить возможно что то сломано)
         if (body['operation'] == "set_mode"):
             argWrapper1 = [_Controller.LogicMode]
-            return SetMode(argWrapper1, body)
+            answer = SetMode(argWrapper1, body)
+            _Controller.LogicMode = argWrapper1[0]
+            return answer
         # Открытие двери
         if (body['operation'] == "open_door"):
             print(body['direction'])
@@ -395,6 +397,11 @@ def RunResponse(sn: int, body: any):
                     ConverterIronLogic.SelectedControllerForOperation(_index)
                 ConverterIronLogic.ControllerApi.Open_Door(
                     int(_Controller.ReaderSide))
+                answer = {
+                    "id": body["id"],
+                    "success ": 1
+                }
+                return answer
         # Добавление карточек
         if (body['operation'] == "add_cards"):
             print("Карточки которые будут добавлены в контролер => ",
@@ -419,8 +426,10 @@ def RunServer():
         # Обработчик входящих подключений
         body = await request.json()
 
-        print(body)
-        print(body['messages'][0])
+        print("\n\n\n\n\nprint(type(body)) => ", type(body))
+
+        print("\nprint(body) =>", body)
+        print("\nprint(body['messages'][0]) =>", body['messages'][0])
 
         #########################################
         # Обработка включение контролера от упр сервера
