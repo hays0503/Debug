@@ -103,7 +103,7 @@ async def get_http_response(urls, Events) -> dict:
     print("print(type(Events)) =>", type(Events))
     async with aiohttp.ClientSession() as session:
         task = asyncio.ensure_future(
-            session.post(url=urls, data=Events))  # Создай
+            session.post(url=urls, data=Events, timeout=3))  # Создай
         tasks.append(task)  # Добавь в массив заданий
         responses = await asyncio.gather(*tasks)  # Запусти все задание
         print("\n\nresponses ====>", responses,
@@ -154,7 +154,7 @@ def InitMiddleware():
     # Пробегаем по каждому инициализируем внутренне состояния (dll-кишков)
     # а также смотрим какой последний был индекс события
     for Controller in ConverterIronLogic._Controllers:
-        ConverterIronLogic.EventsIterator = ConverterIronLogic.ControllerApi.Do_Ctr_Events_Menu(
+        Controller.EventsIterator = ConverterIronLogic.ControllerApi.Do_Ctr_Events_Menu(
             Controller.AddressNumber, -1)
         ConverterIronLogic.ControllerApi.Update_Bank_Key(Controller.Banks)
         SendPost(urls=BASE_URL, Events=Controller.POWER_ON())
@@ -170,51 +170,157 @@ def send_message(message):
 
 
 def MainMiddleware():
-    global Controller
+    global ConverterIronLogic
 
     # start_time = datetime.now()
     ##########################################
 
     while (True):
         try:
-            ###########################################################
-            if (Controller.ActiveControllerV1 == ModeController.ACTIVE):
-                Controller.ControllerApi.Change_Context_Controller(1)
-                Controller.EventIndexInControllerV1 = Controller.ControllerApi.Do_Show_New_Events(
-                    Controller.EventIndexInControllerV1)
-                Events = Controller.ControllerApi.GetControllerEventsJson()
-                print("Controller.ONLINEControllerV1 =>",
-                      Controller.ONLINEControllerV1)
-                if (Controller.ONLINEControllerV1 == ModeController.OFFLINE):
-                    if Events["messages"][0]["events"] != []:
-                        SendPost(urls='http://192.168.0.129:8000',
-                                 Events=Events)
-                        print("Send =>  ", Events)
-                else:
-                    # Работа через двух факторный режим блокируем и потом открываем дверь
-                    if (Controller.ONLINEControllerV1 == ModeController.ONLINE):
-                        if Events["messages"][0]["events"] != []:
-                            Check_access = {
-                                "type": Events["type"],
-                                "sn": Events["sn"],
-                                "messages": [
-                                    {
-                                        "id": 123456789,
-                                        "operation": "check_access",
-                                        "card": Events["messages"][0]["events"][0]["card"],
-                                        "reader": Events["messages"][0]["events"][0]["direct"]
-                                    }
-                                ]
-                            }
+            # Пробегаем по каждому контролеру если контролер
+            # на данный момент активен переключаем контекст
+            # обработки и опрашиваем на новые события
+            for _index ,_Controller in enumerate(ConverterIronLogic._Controllers):
 
-                            print("Send =>  ", Check_access)
-                            SendPost(urls='http://192.168.0.129:8000',
-                                     Events=Check_access)
+                if (_Controller.Active == ModeController.ACTIVE):
+
+                    # Если контролер не выбран выбираем
+                    if (not _Controller.Selected):
+                        ConverterIronLogic.ControllerApi.Change_Context_Controller(
+                            _Controller.AddressNumber)
+                        ConverterIronLogic.SelectedControllerForOperation(
+                            _index)
+
+                    # Проверка на новые события
+                    # (проходим по индексам текущий индекс минус старый индекс равно кол новых событий)
+                    OldEventsIterator = _Controller.EventsIterator
+                    _Controller.EventsIterator = ConverterIronLogic.ControllerApi.Do_Show_New_Events(
+                        _Controller.EventsIterator)
+
+                    # Если новый индекс совпадает со старым значит новых событий нет
+                    if (OldEventsIterator == _Controller.EventsIterator):
+                        continue
+
+                    # Вызываем гетер и берем все событие которые скопились
+                    Events = ConverterIronLogic.ControllerApi.GetControllerEventsJson()
+
+                    if (_Controller.LogicMode == ModeController.OFFLINE):
+                        for messages in Events["messages"]:
+                            # Если у нас массив сообщений не пустой тогда отправим эти данные
+                            if messages["events"] != []:
+                                SendPost(
+                                    urls=BASE_URL, Events=Events)
+                                print("Send =>  ", Events)
+                        # Уже отработали в режиме автономки идем к след контролеру в цикле
+                        continue
+
+                    # Работа через двух факторный режим блокируем и потом открываем дверь
+                    if (_Controller.LogicMode == ModeController.ONLINE):
+                        for messages in Events["messages"]:
+                            if messages["events"] != []:
+                                Check_access = {
+                                    "type": Events["type"],
+                                    "sn": Events["sn"],
+                                    "messages": [
+                                        {
+                                            "id": 1,
+                                            "operation": "check_access",
+                                            "card": messages["events"][0]["card"],
+                                            "reader": messages["events"][0]["direct"]
+                                        }
+                                    ]
+                                }
+                                _Controller.ReaderSide = messages["events"][0]["direct"]
+                                print("Send =>  ", Check_access)
+                                SendPost(urls=BASE_URL,
+                                         Events=Check_access)
+
+            # ###########################################################
+            # if (Controller.ActiveControllerV1 == ModeController.ACTIVE):
+            #     Controller.ControllerApi.Change_Context_Controller(1)
+            #     Controller.EventIndexInControllerV1 = Controller.ControllerApi.Do_Show_New_Events(
+            #         Controller.EventIndexInControllerV1)
+            #     Events = Controller.ControllerApi.GetControllerEventsJson()
+            #     print("Controller.ONLINEControllerV1 =>",
+            #           Controller.ONLINEControllerV1)
+            #     if (Controller.ONLINEControllerV1 == ModeController.OFFLINE):
+            #         if Events["messages"][0]["events"] != []:
+            #             SendPost(urls='http://192.168.0.129:8000',
+            #                      Events=Events)
+            #             print("Send =>  ", Events)
+            #     else:
+            #         # Работа через двух факторный режим блокируем и потом открываем дверь
+            #         if (Controller.ONLINEControllerV1 == ModeController.ONLINE):
+            #             if Events["messages"][0]["events"] != []:
+            #                 Check_access = {
+            #                     "type": Events["type"],
+            #                     "sn": Events["sn"],
+            #                     "messages": [
+            #                         {
+            #                             "id": 123456789,
+            #                             "operation": "check_access",
+            #                             "card": Events["messages"][0]["events"][0]["card"],
+            #                             "reader": Events["messages"][0]["events"][0]["direct"]
+            #                         }
+            #                     ]
+            #                 }
+
+            #                 print("Send =>  ", Check_access)
+            #                 SendPost(urls='http://192.168.0.129:8000',
+            #                          Events=Check_access)
         except queue.Empty:
             continue
     ############################################################################
     # print(datetime.now() - start_time)
     ####################################################################################
+
+
+# def MainMiddlewareOld():
+#     global Controller
+
+#     # start_time = datetime.now()
+#     ##########################################
+
+#     while (True):
+#         try:
+#             ###########################################################
+#             if (Controller.ActiveControllerV1 == ModeController.ACTIVE):
+#                 Controller.ControllerApi.Change_Context_Controller(1)
+#                 Controller.EventIndexInControllerV1 = Controller.ControllerApi.Do_Show_New_Events(
+#                     Controller.EventIndexInControllerV1)
+#                 Events = Controller.ControllerApi.GetControllerEventsJson()
+#                 print("Controller.ONLINEControllerV1 =>",
+#                       Controller.ONLINEControllerV1)
+#                 if (Controller.ONLINEControllerV1 == ModeController.OFFLINE):
+#                     if Events["messages"][0]["events"] != []:
+#                         SendPost(urls='http://192.168.0.129:8000',
+#                                  Events=Events)
+#                         print("Send =>  ", Events)
+#                 else:
+#                     # Работа через двух факторный режим блокируем и потом открываем дверь
+#                     if (Controller.ONLINEControllerV1 == ModeController.ONLINE):
+#                         if Events["messages"][0]["events"] != []:
+#                             Check_access = {
+#                                 "type": Events["type"],
+#                                 "sn": Events["sn"],
+#                                 "messages": [
+#                                     {
+#                                         "id": 123456789,
+#                                         "operation": "check_access",
+#                                         "card": Events["messages"][0]["events"][0]["card"],
+#                                         "reader": Events["messages"][0]["events"][0]["direct"]
+#                                     }
+#                                 ]
+#                             }
+
+#                             print("Send =>  ", Check_access)
+#                             SendPost(urls='http://192.168.0.129:8000',
+#                                      Events=Check_access)
+#         except queue.Empty:
+#             continue
+#     ############################################################################
+#     # print(datetime.now() - start_time)
+#     ####################################################################################
 
 
 def SetActive(ActiveController, OnlineController, body: any):
@@ -242,30 +348,38 @@ def RunResponse(sn: int, body: any):
         Принимаем json и на основе поля 'operation' совершаем какие либо действие
         над контролерами
     '''
-    # Controller является глобальной переменой для класса используется для синхронизации данных между потоков
-    global Controller
-    print("sn =>", sn)
+    # ConverterIronLogic является глобальной переменой для класса используется для синхронизации данных между потоков
+    global ConverterIronLogic
+    print("\n\n\nsn =>", sn)
     print(body['operation'])
     ################################################################
     # Если серийник с таким то номером то совершаем некоторые действия
-    if (sn == 4232):
-        # Активирует / деактивирует работу контроллера с сервером
+    for _index ,_Controller in enumerate(ConverterIronLogic._Controllers):
+        # Если серийник не совпадает с адресом который был в запросе то пропускаем итерацию
+        if (sn != _Controller.SerialNumber):
+            continue
+        # Активация контролера
         if (body['operation'] == "set_active"):
-            argWrapper1 = [Controller.ActiveControllerV1]
-            argWrapper2 = [Controller.ONLINEControllerV1]
+            argWrapper1 = [_Controller.Active]
+            argWrapper2 = [_Controller.LogicMode]
             res = SetActive(ActiveController=argWrapper1,
                             OnlineController=argWrapper2, body=body)
-            Controller.ActiveControllerV1 = argWrapper1[0]
-            Controller.ONLINEControllerV1 = argWrapper2[0]
+            _Controller.Active = argWrapper1[0]
+            _Controller.LogicMode = argWrapper2[0]
             return res
-        # Установка режима
+        # Установка режима контролера(перепроверить возможно что то сломано)
         if (body['operation'] == "set_mode"):
-            return SetMode(Controller.ModeControllerV2, body)
+            argWrapper1 = [_Controller.LogicMode]
+            return SetMode(argWrapper1, body)
         # Открытие двери
         if (body['operation'] == "open_door"):
             print(body['direction'])
-            Controller.ControllerApi.Change_Context_Controller(1)
-            Controller.ControllerApi.Open_Door(int(body['direction']))
+            # Если контролер не выбран выбираем
+            if (not _Controller.Selected):
+                ConverterIronLogic.ControllerApi.Change_Context_Controller(
+                    _Controller.AddressNumber)
+                ConverterIronLogic.SelectedControllerForOperation(_index)
+            ConverterIronLogic.ControllerApi.Open_Door(int(body['direction']))
             answer = {
                 "id": body["id"],
                 "success ": 1
@@ -274,38 +388,28 @@ def RunResponse(sn: int, body: any):
         # Ответ на check_access
         if (body['operation'] == "check_access"):
             if (body['granted'] == 1):
-                Controller.ControllerApi.Change_Context_Controller(1)
-                Controller.ControllerApi.Open_Door(int(1))
+                # Если контролер не выбран выбираем
+                if (not _Controller.Selected):
+                    ConverterIronLogic.ControllerApi.Change_Context_Controller(
+                        _Controller.AddressNumber)
+                    ConverterIronLogic.SelectedControllerForOperation(_index)
+                ConverterIronLogic.ControllerApi.Open_Door(
+                    int(_Controller.ReaderSide))
         # Добавление карточек
         if (body['operation'] == "add_cards"):
             print("Карточки которые будут добавлены в контролер => ",
                   body["cards"])
-            Controller.ControllerApi.Change_Context_Controller(1)
+            if (not _Controller.Selected):
+                ConverterIronLogic.ControllerApi.Change_Context_Controller(
+                    _Controller.AddressNumber)
+                ConverterIronLogic.SelectedControllerForOperation(_index)
             for cart in body["cards"]:
-                Controller.ControllerApi.Add_Cart(cart["card"])
+                ConverterIronLogic.ControllerApi.Add_Cart(cart["card"])
             answer = {
                 "id": body["id"],
                 "success ": len(body["cards"])
             }
             return answer
-###############################################################
-    # Если серийник с таким то номером то совершаем некоторые действия
-    if (sn == 4225):
-        # Активирует / деактивирует работу контроллера с сервером
-        if (body['operation'] == "set_active"):
-            argWrapper1 = [Controller.ActiveControllerV2]
-            argWrapper2 = [Controller.ONLINEControllerV2]
-            res = SetActive(ActiveController=argWrapper1,
-                            OnlineController=argWrapper2, body=body)
-            Controller.ActiveControllerV2 = argWrapper1[0]
-            Controller.ONLINEControllerV2 = argWrapper2[0]
-            return res
-        # Установка режима
-        if (body['operation'] == "set_mode"):
-            return SetMode(Controller.ModeControllerV2, body)
-        if (body['operation'] == "open_door"):
-            Controller.ControllerApi.Change_Context_Controller(2)
-            Controller.ControllerApi.Open_Door(int(body['direction']))
 
 
 def RunServer():

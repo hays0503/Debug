@@ -17,6 +17,15 @@ class ConverterInstance:
         '''
         self.ControllerApi = IronLogicControllerApi(patch_to_dll)
 
+    # Устанавливает в флаг что над этим контролером
+    # в данный момент ведётся работа а с других этот флаг снимается
+    def SelectedControllerForOperation(self, index: int):
+        for _index, Controller in enumerate(self._Controllers):
+            if (_index == index):
+                Controller.Selected = True
+            else:
+                Controller.Selected = False
+
     # Функция для добавления новых контролеров
     def AddNewController(self,
                          addressInConverter: int,
