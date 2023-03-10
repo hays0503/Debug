@@ -2,6 +2,7 @@ from contextlib import suppress
 import aiohttp
 from aiohttp import web
 import asyncio
+from ControllerInstance import ControllerInstance
 from ConverterInstance import ConverterInstance
 from IronLogicApiDll import IronLogicControllerApi
 from datetime import datetime
@@ -33,8 +34,7 @@ appController = web.Application()
 appSender = web.Application()
 # Web - часть
 app = web.Application()
-# Web - часть
-message_queue = queue.Queue()
+
 
 BASE_URL = 'http://192.168.0.129:8000'
 
@@ -88,13 +88,12 @@ def InitMiddleware():
         Controller.EventsIterator = ConverterIronLogic.ControllerApi.Do_Ctr_Events_Menu(
             Controller.AddressNumber, -1)
         ConverterIronLogic.ControllerApi.Update_Bank_Key(Controller.Banks)
-        Controller.KeysInController = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()[
-            'messages'][0]["cards"]
+        Controller.KeysInController = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
 
         ################################################################
         # Собираем информацию по удалённым ключам в контролере
         JsonDllGetDeleteIndexKey = ConverterIronLogic.ControllerApi.GetDeleteIndexKeyInControllerJson()
-        ArrCards = JsonDllGetDeleteIndexKey["messages"][0]["cards"]
+        ArrCards = JsonDllGetDeleteIndexKey["cards"]
         ArrCardsIndex = []
         for Index in ArrCards:
             ArrCardsIndex.append(Index["pos"])
@@ -106,18 +105,33 @@ def InitMiddleware():
 
 ##########################################
 # Функция для отправки сообщений в очередь
-
-
-def send_message(message):
+def send_message(message_queue, message):
     message_queue.put(message)
 ##########################################
 
 
-def MainMiddleware():
-    global ConverterIronLogic
+##########################################
+# Функция для обработки сообщений в очередь
+def run_processing_message(message, sn):
+    # Проверяем наличие данных в очереди
+    if (not message.empty()):
+        print("Сообщений нет, контролер = >", sn)
+    
+    while not message.empty():
+        items = message.get()
+        if items is None:
+            print("Сообщения закончились, контролер = >", sn)
+            break
+        for item in items["messages"]:
+            print("\n\n\nПерехватил и отправил на обработку сообщение: ", items)
+            response_body = ConverterIronLogic.RunResponse(items["sn"], item)
+            SendPost(urls=BASE_URL, Events=response_body)
+##########################################
 
-    # start_time = datetime.now()
-    ##########################################
+
+def MainMiddleware():
+    # ConverterIronLogic является глобальной переменой для класса используется для синхронизации данных между потоков
+    global ConverterIronLogic
 
     while (True):
         try:
@@ -127,18 +141,16 @@ def MainMiddleware():
             for _index, _Controller in enumerate(ConverterIronLogic._Controllers):
 
                 if (_Controller.Active == ModeController.ACTIVE):
-
-                    # # Не запущена блокирующая операция с контролером
-                    # if (not ConverterIronLogic.DisableChangeController):
-                    #     print("\n\nSerialNumber ", _Controller.SerialNumber,
-                    #           not ConverterIronLogic.DisableChangeController)
+                    print("_Controller.SerialNumber= ",_Controller.SerialNumber,
+                      "_Controller.Active= ",_Controller.Active,
+                      "not _Controller.Selected= ",not _Controller.Selected)
                     # Если контролер не выбран выбираем
-                    if (not _Controller.Selected):
-                        # ConverterIronLogic.RunTaskInController = True
-                        ConverterIronLogic.ControllerApi.Change_Context_Controller(
-                            _Controller.AddressNumber)
-                        ConverterIronLogic.SelectedControllerForOperation(
-                            _index)
+                    ConverterIronLogic.ControllerApi.Change_Context_Controller(
+                        _Controller.AddressNumber)
+                        
+
+                    run_processing_message(
+                        _Controller.message_queue, _Controller.SerialNumber)
 
                     # Проверка на новые события
                     # (проходим по индексам текущий индекс минус старый индекс равно кол новых событий)
@@ -182,32 +194,11 @@ def MainMiddleware():
                                 _Controller.ReaderSide = messages["events"][0]["direct"]
                                 SendPost(urls=BASE_URL,
                                          Events=Check_access)
-
-                    # ConverterIronLogic.RunTaskInController = False
         except queue.Empty:
             continue
 
 
-def SetActive(ActiveController, OnlineController, body: any):
-    ActiveController[0] = body["active"]
-    OnlineController[0] = body["online"]
-    response_body = {
-        "id": 123456789,
-        "success ": 1
-    }
-    return response_body
-
-
-def SetMode(area, body: any):
-    area[0] = body["mode"]
-    response_body = {
-        "id": 123456789,
-        "success ": 1
-    }
-    return response_body
-
-
-def RunResponse(sn: int, body: any):
+def RunResponse(body: any):
     '''
         Запускаем обработчик для обработки и совершение действий с контролерами
         Принимаем json и на основе поля 'operation' совершаем какие либо действие
@@ -215,122 +206,55 @@ def RunResponse(sn: int, body: any):
     '''
     # ConverterIronLogic является глобальной переменой для класса используется для синхронизации данных между потоков
     global ConverterIronLogic
-    ################################################################
-    # Если серийник с таким то номером то совершаем некоторые действия
-    for _index, _Controller in enumerate(ConverterIronLogic._Controllers):
-        # Если серийник не совпадает с адресом который был в запросе то пропускаем итерацию
-        if (sn != _Controller.SerialNumber):
-            continue
-        # Активация контролера
-        if (body['operation'] == "set_active"):
-            argWrapper1 = [_Controller.Active]
-            argWrapper2 = [_Controller.LogicMode]
-            res = SetActive(ActiveController=argWrapper1,
-                            OnlineController=argWrapper2, body=body)
-            _Controller.Active = argWrapper1[0]
-            _Controller.LogicMode = argWrapper2[0]
-            return res
-        # Установка режима контролера(перепроверить возможно что то сломано)
-        if (body['operation'] == "set_mode"):
-            argWrapper1 = [_Controller.LogicMode]
-            answer = SetMode(argWrapper1, body)
-            _Controller.LogicMode = argWrapper1[0]
-            return answer
-        # Открытие двери
-        if (body['operation'] == "open_door"):
-            # Если контролер не выбран выбираем
-            if (not _Controller.Selected):
-                ConverterIronLogic.ControllerApi.Change_Context_Controller(
-                    _Controller.AddressNumber)
-                ConverterIronLogic.SelectedControllerForOperation(_index)
-            ConverterIronLogic.ControllerApi.Open_Door(int(body['direction']))
-            answer = {
-                "id": body["id"],
-                "success ": 1
-            }
-            return answer
-        # Ответ на check_access
-        if (body['operation'] == "check_access"):
-            if (body['granted'] == 1):
-                # Если контролер не выбран выбираем
-                if (not _Controller.Selected):
-                    ConverterIronLogic.ControllerApi.Change_Context_Controller(
-                        _Controller.AddressNumber)
-                    ConverterIronLogic.SelectedControllerForOperation(_index)
-                ConverterIronLogic.ControllerApi.Open_Door(
-                    int(_Controller.ReaderSide))
-                answer = {
-                    "id": body["id"],
+
+    response_body = {
+        "id": 123456789,
+        "success ": len(body["messages"])
+    }
+
+    for message in body["messages"]:
+        ################################################################
+        # Если серийник с таким то номером то совершаем некоторые действия
+        for _index, _Controller in enumerate(ConverterIronLogic._Controllers):
+            # Если серийник не совпадает с адресом который был в запросе то пропускаем итерацию
+            if (body["sn"] != _Controller.SerialNumber):
+                continue
+
+            # Активация контролера
+            if (message['operation'] == "set_active"):
+                _Controller.Active = message["active"]
+                _Controller.LogicMode = message["online"]
+                response_body = {
+                    "id": 123456789,
                     "success ": 1
                 }
-                return answer
-        # Добавление карточек
-        if (body['operation'] == "add_cards"):
-            
-            # Проверить что за контролер сейчас выбран
-            if (not _Controller.Selected):
-                ConverterIronLogic.ControllerApi.Change_Context_Controller(
-                    _Controller.AddressNumber)
+                return response_body
+            # Установка режима контролера(перепроверить возможно что то сломано)
+            if (message['operation'] == "set_mode"):
+                _Controller.LogicMode = message["mode"]
+                response_body = {
+                    "id": 123456789,
+                    "success ": 1
+                }
+                return response_body
+
+            if (message['operation'] == "read_cards"):
+                if (not _Controller.Selected):
+                    ConverterIronLogic.ControllerApi.Change_Context_Controller(_Controller.AddressNumber)
                 ConverterIronLogic.SelectedControllerForOperation(_index)
-            # Пробежать по всем переданным карточкам и произвести добавление
-            for cart in body["cards"]:
-                # Если у нас не удалялись до этого карты то добавляем карты в конец
-                # Иначе сначала в свободные места потом в конец(экономия места используем весь банк ключей)
-                if (not _Controller.KeyIndexInController):
-                    ConverterIronLogic.ControllerApi.Add_Cart(cart["card"])
-                else:
-                    ConverterIronLogic.ControllerApi.Add_Cart_Index(
-                        cart["card"], _Controller.KeyIndexInController)
-                    _Controller.KeyIndexInController.pop()
-            answer = {
-                "id": body["id"],
-                "success ": len(body["cards"])
-            }
-            return answer
-        # Удаление карточек
-        if (body['operation'] == "del_cards"):
-
-            # Проверить что за контролер сейчас выбран
-            if (not _Controller.Selected):
-                ConverterIronLogic.ControllerApi.Change_Context_Controller(
-                    _Controller.AddressNumber)
-                ConverterIronLogic.SelectedControllerForOperation(_index)
-            # Пробежать по всем переданным карточкам и произвести из экзекуцию
-            for cart in body["cards"]:
-                _Controller._rawKeyIndexInController.append(
-                    ConverterIronLogic.ControllerApi.Delete_Cart(cart["card"]))
-
-            # Сбор данных о удалённых ключах
-            for _IndexIn_Controller in _Controller._rawKeyIndexInController:
-                index = _IndexIn_Controller.contents.value
-                if (index != -1):
-                    _Controller.KeyIndexInController.append(int(index))
-
-            _Controller._rawKeyIndexInController.clear()
-            _Controller.KeyIndexInController.sort()
-            deletedCarts = []
-            for _CartsIndex in _Controller.KeyIndexInController:
-                deletedCarts.append(
-                    _Controller.KeysInController[_CartsIndex])
-
-            answer = {
-                "id": body["id"],
-                "success ": len(body["cards"]),
-                "deletedCarts": deletedCarts,
-
-            }
-            return answer
-        # Запрос на карточки которые находятся в контролере
-        if (body['operation'] == "read_cards"):
-            if (not _Controller.Selected):
-                ConverterIronLogic.ControllerApi.Change_Context_Controller(
-                    _Controller.AddressNumber)
-            ConverterIronLogic.SelectedControllerForOperation(_index)
-            ConverterIronLogic.ControllerApi.Update_Bank_Key(
+                ConverterIronLogic.ControllerApi.Update_Bank_Key(
                 _Controller.Banks)
-            answer = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
-            _Controller.KeysInController = answer
-            return answer
+                answer = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
+                _Controller.KeysInController = answer
+                return answer
+
+            # Формируем пакет сообщений
+            send_message(_Controller.message_queue, body)
+
+        # Заканчиваем (ставим разделитель)на пакет сообщений
+    send_message(_Controller.message_queue, None)
+
+    return response_body
 
 
 def RunServer():
@@ -346,7 +270,7 @@ def RunServer():
             return web.json_response({"ok": "ok"})
         #########################################
         # Обработка включение контролера от упр сервера
-        response_body = RunResponse(body['sn'], body['messages'][0])
+        response_body = RunResponse(body)
         #########################################
         return web.json_response(response_body)
     #####################################################################################

@@ -47,22 +47,13 @@ class ConverterInstance:
         # Вносим его в список контролеров которые подключены в конвертер
         self._Controllers.append(newInstance)
 
-    def SetActive(ActiveController, OnlineController, body: any):
-        ActiveController[0] = body["active"]
-        OnlineController[0] = body["online"]
-        response_body = {
-            "id": 123456789,
-            "success ": 1
-        }
-        return response_body
-
-    def SetMode(area, body: any):
-        area[0] = body["mode"]
-        response_body = {
-            "id": 123456789,
-            "success ": 1
-        }
-        return response_body
+    # def SetMode(area, body: any):
+    #     area[0] = body["mode"]
+    #     response_body = {
+    #         "id": 123456789,
+    #         "success ": 1
+    #     }
+    #     return response_body
 
     def RunResponse(self, sn: int, body: any):
         '''
@@ -77,21 +68,6 @@ class ConverterInstance:
             # Если серийник не совпадает с адресом который был в запросе то пропускаем итерацию
             if (sn != _Controller.SerialNumber):
                 continue
-            # Активация контролера
-            if (body['operation'] == "set_active"):
-                argWrapper1 = [_Controller.Active]
-                argWrapper2 = [_Controller.LogicMode]
-                res = self.SetActive(ActiveController=argWrapper1,
-                                     OnlineController=argWrapper2, body=body)
-                _Controller.Active = argWrapper1[0]
-                _Controller.LogicMode = argWrapper2[0]
-                return res
-            # Установка режима контролера(перепроверить возможно что то сломано)
-            if (body['operation'] == "set_mode"):
-                argWrapper1 = [_Controller.LogicMode]
-                answer = self.SetMode(argWrapper1, body)
-                _Controller.LogicMode = argWrapper1[0]
-                return answer
             # Открытие двери
             if (body['operation'] == "open_door"):
                 self.ControllerApi.Open_Door(int(body['direction']))
@@ -142,16 +118,11 @@ class ConverterInstance:
                         _Controller.KeyIndexInController.append(int(index))
 
                 _Controller._rawKeyIndexInController.clear()
-                _Controller.KeyIndexInController.sort()
-                deletedCarts = []
-                for _CartsIndex in _Controller.KeyIndexInController:
-                    deletedCarts.append(
-                        _Controller.KeysInController[_CartsIndex])
 
                 answer = {
                     "id": body["id"],
                     "success ": len(body["cards"]),
-                    "deletedCarts": deletedCarts,
+                    "indexDeletedCarts": _Controller.KeyIndexInController,
 
                 }
                 return answer
@@ -160,5 +131,8 @@ class ConverterInstance:
                 self.ControllerApi.Update_Bank_Key(
                     _Controller.Banks)
                 answer = self.ControllerApi.GetAllKeyInControllerJson()
+                print("\n\n\n+++++++++++++++++++++\n", sn)
+                print(answer)
+                # if (not len(answer['cards']) == 0):
                 _Controller.KeysInController = answer
                 return answer

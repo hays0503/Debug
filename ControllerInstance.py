@@ -1,5 +1,8 @@
 
 
+import queue
+
+
 class ControllerInstance:
 
     # Означает что с этим контролером в данный момент работают
@@ -44,7 +47,7 @@ class ControllerInstance:
     # Массив из индексов ключей который удалили в контролере
     # [] означает что на данный момент ключей нет или структура не была инициализированная
     KeyIndexInController = []
-    
+
     # Массив из индексов ключей (сырые без приведения типа) который удалили в контролере
     # [] означает что на данный момент ключей нет или структура не была инициализированная
     _rawKeyIndexInController = []
@@ -70,6 +73,9 @@ class ControllerInstance:
     # Включен ли контролер
     # -1 означает что на данный момент не присвоен
     Active = -1
+
+    # Формирование очереди сообщений
+    message_queue = queue.Queue()
 
     def POWER_ON(self):
         '''
@@ -98,6 +104,3 @@ class ControllerInstance:
             "messages": [Messages]
         }
         return ObjectBuildMessage
-    
-    
-    
