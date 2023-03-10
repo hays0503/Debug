@@ -1,3 +1,5 @@
 ControllerIronLogic.exp
 ControllerIronLogic.lib
 ControllerIronLogic.pdb
+.venv
+.vscode

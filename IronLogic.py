@@ -1,4 +1,3 @@
-
 from contextlib import suppress
 import aiohttp
 from aiohttp import web
@@ -22,29 +21,11 @@ class ModeController:
     ONLINE = 1
     OFFLINE = 0
 
-
-class InfoInController:
-    '''
-        Информация о контролере
-    '''
-    ControllerApi: IronLogicControllerApi
-    EventIndexInControllerV1: int = 0
-    ModeControllerV1: int = ModeController.NORMAL
-    EventIndexInControllerV2: int = 0
-    ModeControllerV2: int = ModeController.NORMAL
-    ActiveControllerV1: int = 0
-    ActiveControllerV2: int = 0
-    ONLINEControllerV1: int = 0
-    ONLINEControllerV2: int = 0
-
-
 # Корневые объекты
+
 
 # Абстракция один конвертер множество контролеров
 ConverterIronLogic = ConverterInstance('./ControllerIronLogic.dll')
-
-# Старая реализация для проверки (рефакториться)
-Controller = InfoInController()
 
 # Web - часть
 appController = web.Application()
@@ -60,68 +41,18 @@ BASE_URL = 'http://192.168.0.129:8000'
 #####################################################################################
 
 
-def POWER_ON():
-    '''
-        Сообщение включение (web-json)
-    '''
-    JsonObject = {
-        "id": 123456789,
-        "operation": "power_on",
-        "fw": "1.0.1",
-        "conn_fw": "2.0.2",
-        "active": 0,
-        "mode": 0,
-        "controller_ip": "192.168.0.222"
-    }
-    return JsonObject
-#####################################################################################
-
-#####################################################################################
-
-
-def Build_Message(type: str, sn: str, Messages):
-    '''
-        Построение типового (web-json)
-    '''
-    ObjectBuildMessage = {
-        "type": type,
-        "sn": sn,
-        "messages": [Messages]
-    }
-    return ObjectBuildMessage
-#####################################################################################
-
-#####################################################################################
-
-
 async def get_http_response(urls, Events) -> dict:
     '''
         Отправка данных на удалённый сервер
     '''
     tasks = []
     Events = json.dumps(Events)
-    print("print(type(Events)) =>", type(Events))
     async with aiohttp.ClientSession() as session:
         task = asyncio.ensure_future(
             session.post(url=urls, data=Events, timeout=3))  # Создай
         tasks.append(task)  # Добавь в массив заданий
         responses = await asyncio.gather(*tasks)  # Запусти все задание
-        print("\n\nresponses ====>", responses,
-              "type(responses) ======>", type(responses))
-        # print("\nresponses.content ====>", responses[0].content.readany())
-        # async for line in responses[0].content:
-        #     print("\nprint(line) = >", line)
     return f'Exit in func => get_http_response()'
-#####################################################################################
-
-
-async def run_task(_app, urls, Events):
-    task = asyncio.create_task(get_http_response())
-    yield
-    task.cancel()
-    with suppress(asyncio.CancelledError):
-        await task  # Ensure any exceptions etc. are raised.
-
 #####################################################################################
 
 
@@ -129,11 +60,11 @@ def SendPost(urls, Events):
     '''
         Отправка данных на удалённый сервер
     '''
-    print(Events)
+    # print(Events)
     try:
         data = asyncio.run(get_http_response(
             urls=urls, Events=Events))
-        print("\nget_http_response => ", data)
+        # print("\nget_http_response => ", data)
     except Exception as e:
         print("Что то пошло не по плану", e)
 #####################################################################################
@@ -157,6 +88,19 @@ def InitMiddleware():
         Controller.EventsIterator = ConverterIronLogic.ControllerApi.Do_Ctr_Events_Menu(
             Controller.AddressNumber, -1)
         ConverterIronLogic.ControllerApi.Update_Bank_Key(Controller.Banks)
+        Controller.KeysInController = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()[
+            'messages'][0]["cards"]
+
+        ################################################################
+        # Собираем информацию по удалённым ключам в контролере
+        JsonDllGetDeleteIndexKey = ConverterIronLogic.ControllerApi.GetDeleteIndexKeyInControllerJson()
+        ArrCards = JsonDllGetDeleteIndexKey["messages"][0]["cards"]
+        ArrCardsIndex = []
+        for Index in ArrCards:
+            ArrCardsIndex.append(Index["pos"])
+        Controller.KeyIndexInController = ArrCardsIndex
+        ################################################################
+
         SendPost(urls=BASE_URL, Events=Controller.POWER_ON())
 
 
@@ -184,8 +128,13 @@ def MainMiddleware():
 
                 if (_Controller.Active == ModeController.ACTIVE):
 
+                    # # Не запущена блокирующая операция с контролером
+                    # if (not ConverterIronLogic.DisableChangeController):
+                    #     print("\n\nSerialNumber ", _Controller.SerialNumber,
+                    #           not ConverterIronLogic.DisableChangeController)
                     # Если контролер не выбран выбираем
                     if (not _Controller.Selected):
+                        # ConverterIronLogic.RunTaskInController = True
                         ConverterIronLogic.ControllerApi.Change_Context_Controller(
                             _Controller.AddressNumber)
                         ConverterIronLogic.SelectedControllerForOperation(
@@ -210,7 +159,7 @@ def MainMiddleware():
                             if messages["events"] != []:
                                 SendPost(
                                     urls=BASE_URL, Events=Events)
-                                print("Send =>  ", Events)
+                                # ##print("Send =>  ", Events)
                         # Уже отработали в режиме автономки идем к след контролеру в цикле
                         continue
 
@@ -225,102 +174,18 @@ def MainMiddleware():
                                         {
                                             "id": 1,
                                             "operation": "check_access",
-                                            "card": messages["events"][0]["card"],
+                                            "card": messages["events"][0]["card"].upper(),
                                             "reader": messages["events"][0]["direct"]
                                         }
                                     ]
                                 }
                                 _Controller.ReaderSide = messages["events"][0]["direct"]
-                                print("Send =>  ", Check_access)
                                 SendPost(urls=BASE_URL,
                                          Events=Check_access)
 
-            # ###########################################################
-            # if (Controller.ActiveControllerV1 == ModeController.ACTIVE):
-            #     Controller.ControllerApi.Change_Context_Controller(1)
-            #     Controller.EventIndexInControllerV1 = Controller.ControllerApi.Do_Show_New_Events(
-            #         Controller.EventIndexInControllerV1)
-            #     Events = Controller.ControllerApi.GetControllerEventsJson()
-            #     print("Controller.ONLINEControllerV1 =>",
-            #           Controller.ONLINEControllerV1)
-            #     if (Controller.ONLINEControllerV1 == ModeController.OFFLINE):
-            #         if Events["messages"][0]["events"] != []:
-            #             SendPost(urls='http://192.168.0.129:8000',
-            #                      Events=Events)
-            #             print("Send =>  ", Events)
-            #     else:
-            #         # Работа через двух факторный режим блокируем и потом открываем дверь
-            #         if (Controller.ONLINEControllerV1 == ModeController.ONLINE):
-            #             if Events["messages"][0]["events"] != []:
-            #                 Check_access = {
-            #                     "type": Events["type"],
-            #                     "sn": Events["sn"],
-            #                     "messages": [
-            #                         {
-            #                             "id": 123456789,
-            #                             "operation": "check_access",
-            #                             "card": Events["messages"][0]["events"][0]["card"],
-            #                             "reader": Events["messages"][0]["events"][0]["direct"]
-            #                         }
-            #                     ]
-            #                 }
-
-            #                 print("Send =>  ", Check_access)
-            #                 SendPost(urls='http://192.168.0.129:8000',
-            #                          Events=Check_access)
+                    # ConverterIronLogic.RunTaskInController = False
         except queue.Empty:
             continue
-    ############################################################################
-    # print(datetime.now() - start_time)
-    ####################################################################################
-
-
-# def MainMiddlewareOld():
-#     global Controller
-
-#     # start_time = datetime.now()
-#     ##########################################
-
-#     while (True):
-#         try:
-#             ###########################################################
-#             if (Controller.ActiveControllerV1 == ModeController.ACTIVE):
-#                 Controller.ControllerApi.Change_Context_Controller(1)
-#                 Controller.EventIndexInControllerV1 = Controller.ControllerApi.Do_Show_New_Events(
-#                     Controller.EventIndexInControllerV1)
-#                 Events = Controller.ControllerApi.GetControllerEventsJson()
-#                 print("Controller.ONLINEControllerV1 =>",
-#                       Controller.ONLINEControllerV1)
-#                 if (Controller.ONLINEControllerV1 == ModeController.OFFLINE):
-#                     if Events["messages"][0]["events"] != []:
-#                         SendPost(urls='http://192.168.0.129:8000',
-#                                  Events=Events)
-#                         print("Send =>  ", Events)
-#                 else:
-#                     # Работа через двух факторный режим блокируем и потом открываем дверь
-#                     if (Controller.ONLINEControllerV1 == ModeController.ONLINE):
-#                         if Events["messages"][0]["events"] != []:
-#                             Check_access = {
-#                                 "type": Events["type"],
-#                                 "sn": Events["sn"],
-#                                 "messages": [
-#                                     {
-#                                         "id": 123456789,
-#                                         "operation": "check_access",
-#                                         "card": Events["messages"][0]["events"][0]["card"],
-#                                         "reader": Events["messages"][0]["events"][0]["direct"]
-#                                     }
-#                                 ]
-#                             }
-
-#                             print("Send =>  ", Check_access)
-#                             SendPost(urls='http://192.168.0.129:8000',
-#                                      Events=Check_access)
-#         except queue.Empty:
-#             continue
-#     ############################################################################
-#     # print(datetime.now() - start_time)
-#     ####################################################################################
 
 
 def SetActive(ActiveController, OnlineController, body: any):
@@ -350,8 +215,6 @@ def RunResponse(sn: int, body: any):
     '''
     # ConverterIronLogic является глобальной переменой для класса используется для синхронизации данных между потоков
     global ConverterIronLogic
-    print("\n\n\nsn =>", sn)
-    print("\nprint(body['operation']) =>", body['operation'])
     ################################################################
     # Если серийник с таким то номером то совершаем некоторые действия
     for _index, _Controller in enumerate(ConverterIronLogic._Controllers):
@@ -375,7 +238,6 @@ def RunResponse(sn: int, body: any):
             return answer
         # Открытие двери
         if (body['operation'] == "open_door"):
-            print(body['direction'])
             # Если контролер не выбран выбираем
             if (not _Controller.Selected):
                 ConverterIronLogic.ControllerApi.Change_Context_Controller(
@@ -404,18 +266,70 @@ def RunResponse(sn: int, body: any):
                 return answer
         # Добавление карточек
         if (body['operation'] == "add_cards"):
-            print("Карточки которые будут добавлены в контролер => ",
-                  body["cards"])
+            
+            # Проверить что за контролер сейчас выбран
             if (not _Controller.Selected):
                 ConverterIronLogic.ControllerApi.Change_Context_Controller(
                     _Controller.AddressNumber)
                 ConverterIronLogic.SelectedControllerForOperation(_index)
+            # Пробежать по всем переданным карточкам и произвести добавление
             for cart in body["cards"]:
-                ConverterIronLogic.ControllerApi.Add_Cart(cart["card"])
+                # Если у нас не удалялись до этого карты то добавляем карты в конец
+                # Иначе сначала в свободные места потом в конец(экономия места используем весь банк ключей)
+                if (not _Controller.KeyIndexInController):
+                    ConverterIronLogic.ControllerApi.Add_Cart(cart["card"])
+                else:
+                    ConverterIronLogic.ControllerApi.Add_Cart_Index(
+                        cart["card"], _Controller.KeyIndexInController)
+                    _Controller.KeyIndexInController.pop()
             answer = {
                 "id": body["id"],
                 "success ": len(body["cards"])
             }
+            return answer
+        # Удаление карточек
+        if (body['operation'] == "del_cards"):
+
+            # Проверить что за контролер сейчас выбран
+            if (not _Controller.Selected):
+                ConverterIronLogic.ControllerApi.Change_Context_Controller(
+                    _Controller.AddressNumber)
+                ConverterIronLogic.SelectedControllerForOperation(_index)
+            # Пробежать по всем переданным карточкам и произвести из экзекуцию
+            for cart in body["cards"]:
+                _Controller._rawKeyIndexInController.append(
+                    ConverterIronLogic.ControllerApi.Delete_Cart(cart["card"]))
+
+            # Сбор данных о удалённых ключах
+            for _IndexIn_Controller in _Controller._rawKeyIndexInController:
+                index = _IndexIn_Controller.contents.value
+                if (index != -1):
+                    _Controller.KeyIndexInController.append(int(index))
+
+            _Controller._rawKeyIndexInController.clear()
+            _Controller.KeyIndexInController.sort()
+            deletedCarts = []
+            for _CartsIndex in _Controller.KeyIndexInController:
+                deletedCarts.append(
+                    _Controller.KeysInController[_CartsIndex])
+
+            answer = {
+                "id": body["id"],
+                "success ": len(body["cards"]),
+                "deletedCarts": deletedCarts,
+
+            }
+            return answer
+        # Запрос на карточки которые находятся в контролере
+        if (body['operation'] == "read_cards"):
+            if (not _Controller.Selected):
+                ConverterIronLogic.ControllerApi.Change_Context_Controller(
+                    _Controller.AddressNumber)
+            ConverterIronLogic.SelectedControllerForOperation(_index)
+            ConverterIronLogic.ControllerApi.Update_Bank_Key(
+                _Controller.Banks)
+            answer = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
+            _Controller.KeysInController = answer
             return answer
 
 
@@ -426,22 +340,22 @@ def RunServer():
         # Обработчик входящих подключений
         body = await request.json()
 
-        print("\n\n\n\n\nprint(type(body)) => ", type(body))
+        print("body=>", body)
 
-        print("\nprint(body) =>", body)
-        print("\nprint(body['messages'][0]) =>", body['messages'][0])
-
+        if (len(body['messages']) == 0):
+            return web.json_response({"ok": "ok"})
         #########################################
         # Обработка включение контролера от упр сервера
         response_body = RunResponse(body['sn'], body['messages'][0])
         #########################################
         return web.json_response(response_body)
     #####################################################################################
-    # Инициализация контролеров
-    InitMiddleware()
-    # Обработчик действий с контролера
 
     def Run_Controller_Thread():
+        # Инициализация контролеров
+        time.sleep(5)
+        InitMiddleware()
+        # Обработчик действий с контролера
         appController.cleanup_ctx.append(MainMiddleware())
 
     def Run_App_Thread():
