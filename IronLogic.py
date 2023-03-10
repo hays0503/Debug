@@ -116,7 +116,7 @@ def run_processing_message(message, sn):
     # Проверяем наличие данных в очереди
     if (not message.empty()):
         print("Сообщений нет, контролер = >", sn)
-    
+
     while not message.empty():
         items = message.get()
         if items is None:
@@ -125,7 +125,8 @@ def run_processing_message(message, sn):
         for item in items["messages"]:
             print("\n\n\nПерехватил и отправил на обработку сообщение: ", items)
             response_body = ConverterIronLogic.RunResponse(items["sn"], item)
-            SendPost(urls=BASE_URL, Events=response_body)
+            print("ТО что отправлен серверу", response_body)
+            # SendPost(urls=BASE_URL, Events=response_body)
 ##########################################
 
 
@@ -141,13 +142,14 @@ def MainMiddleware():
             for _index, _Controller in enumerate(ConverterIronLogic._Controllers):
 
                 if (_Controller.Active == ModeController.ACTIVE):
-                    print("_Controller.SerialNumber= ",_Controller.SerialNumber,
-                      "_Controller.Active= ",_Controller.Active,
-                      "not _Controller.Selected= ",not _Controller.Selected)
+                    # print("_Controller.SerialNumber= ",_Controller.SerialNumber,
+                    #   "_Controller.Active= ",_Controller.Active,
+                    #   "not _Controller.Selected= ",not _Controller.Selected)
                     # Если контролер не выбран выбираем
+                    # if (not _Controller.Selected):
                     ConverterIronLogic.ControllerApi.Change_Context_Controller(
                         _Controller.AddressNumber)
-                        
+                    ConverterIronLogic.SelectedControllerForOperation(_index)
 
                     run_processing_message(
                         _Controller.message_queue, _Controller.SerialNumber)
@@ -238,15 +240,17 @@ def RunResponse(body: any):
                 }
                 return response_body
 
-            if (message['operation'] == "read_cards"):
-                if (not _Controller.Selected):
-                    ConverterIronLogic.ControllerApi.Change_Context_Controller(_Controller.AddressNumber)
-                ConverterIronLogic.SelectedControllerForOperation(_index)
-                ConverterIronLogic.ControllerApi.Update_Bank_Key(
-                _Controller.Banks)
-                answer = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
-                _Controller.KeysInController = answer
-                return answer
+            # if (message['operation'] == "read_cards"):
+            #     # if (not _Controller.Selected):
+            #     ConverterIronLogic.ControllerApi.Change_Context_Controller(
+            #         _Controller.AddressNumber)
+            #     # ConverterIronLogic.SelectedControllerForOperation(_index)
+            #     ConverterIronLogic.ControllerApi.Update_Bank_Key(
+            #         _Controller.Banks)
+            #     answer = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
+            #     _Controller.KeysInController = answer
+            #     response_body = answer
+            #     # return answer
 
             # Формируем пакет сообщений
             send_message(_Controller.message_queue, body)
