@@ -142,6 +142,7 @@ class ConverterInstance:
                 # print("\n\n\n+++++++++++++++++++++\n", serial_number)
                 # print(answer)
                 # if (not len(answer['cards']) == 0):
+                controller.message_queue_out.put(controller.key_index_in_controller)
                 return controller.key_index_in_controller
 
         return None
