@@ -3,101 +3,109 @@ from ControllerInstance import ControllerInstance
 
 
 class ConverterInstance:
+    '''
+        Класс в котором описана абстракция конвертера
+    '''
 
     # Создание объекта для обращению к api
-    ControllerApi: IronLogicControllerApi
+    controller_api: IronLogicControllerApi
 
     # Массив контролеров
-    _Controllers: ControllerInstance = []
+    arr_controllers: ControllerInstance = []
 
     # Разрешить переключение между контролерами
-    DisableChangeController = False
+    disable_change_controller = False
 
     # Запущенна задача в контролере
-    RunTaskInController = False
+    run_task_in_controller = False
 
     def __init__(self, patch_to_dll: str):
         '''
             @arg
                 patch_to_dll : str путь др dll
         '''
-        self.ControllerApi = IronLogicControllerApi(patch_to_dll)
+        self.controller_api = IronLogicControllerApi(patch_to_dll)
 
     # Устанавливает в флаг что над этим контролером
     # в данный момент ведётся работа а с других этот флаг снимается
-    def SelectedControllerForOperation(self, index: int):
-        for _index, Controller in enumerate(self._Controllers):
-            if (_index == index):
-                Controller.Selected = True
+    def selected_controller_for_operation(self, index: int):
+        '''
+            Выбрать контролер для операций
+        '''
+        for _index, controller in enumerate(self.arr_controllers):
+            if _index == index:
+                controller.Selected = True
             else:
-                Controller.Selected = False
+                controller.Selected = False
 
     # Функция для добавления новых контролеров
-    def AddNewController(self,
-                         addressInConverter: int,
-                         SerialNumber: int,
-                         NameController: str,
-                         Banks: int):
+    def add_new_controller(self,
+                           address_in_converter: int,
+                           serial_number: int,
+                           name_controller: str,
+                           banks: int):
+        '''
+            @arg
+                address_in_converter: int,
+                serial_number: int,
+                name_controller: str,
+                banks: int
+        '''
         # Создаем объект контролера и наполняем его данными
-        newInstance = ControllerInstance()
-        newInstance.AddressNumber = addressInConverter
-        newInstance.SerialNumber = SerialNumber
-        newInstance.NameController = NameController
-        newInstance.Banks = Banks
+        new_instance = ControllerInstance()
+        new_instance.address_number = address_in_converter
+        new_instance.serial_number = serial_number
+        new_instance.name_controller = name_controller
+        new_instance.banks = banks
         # Вносим его в список контролеров которые подключены в конвертер
-        self._Controllers.append(newInstance)
+        self.arr_controllers.append(new_instance)
 
-    # def SetMode(area, body: any):
-    #     area[0] = body["mode"]
-    #     response_body = {
-    #         "id": 123456789,
-    #         "success ": 1
-    #     }
-    #     return response_body
-
-    def RunResponse(self, sn: int, body: any):
+    def run_response(self, serial_number: int, body: any):
         '''
             Запускаем обработчик для обработки и совершение действий с контролерами
             Принимаем json и на основе поля 'operation' совершаем какие либо действие
             над контролерами
         '''
-        # ConverterIronLogic является глобальной переменой для класса используется для синхронизации данных между потоков
+        # ConverterIronLogic является глобальной
+        # переменой для класса используется для синхронизации данных между потоков
         ################################################################
         # Если серийник с таким то номером то совершаем некоторые действия
-        for _index, _Controller in enumerate(self._Controllers):
+        for controller in self.arr_controllers:
             # Если серийник не совпадает с адресом который был в запросе то пропускаем итерацию
-            if (sn != _Controller.SerialNumber):
+            if serial_number != controller.serial_number:
                 continue
             # Открытие двери
-            if (body['operation'] == "open_door"):
-                self.ControllerApi.Open_Door(int(body['direction']))
+            if body['operation'] == "open_door":
+                self.controller_api.open_door(int(body['direction']))
                 answer = {
                     "id": body["id"],
                     "success ": 1
                 }
                 return answer
             # Ответ на check_access
-            if (body['operation'] == "check_access"):
-                if (body['granted'] == 1):
-                    self.ControllerApi.Open_Door(
-                        int(_Controller.ReaderSide))
+            if body['operation'] == "check_access":
+                if body['granted'] == 1:
+                    self.controller_api.open_door(
+                        int(controller.reader_side))
                     answer = {
                         "id": body["id"],
                         "success ": 1
                     }
                     return answer
             # Добавление карточек
-            if (body['operation'] == "add_cards"):
+            if body['operation'] == "add_cards":
                 # Пробежать по всем переданным карточкам и произвести добавление
                 for cart in body["cards"]:
-                    # Если у нас не удалялись до этого карты то добавляем карты в конец
-                    # Иначе сначала в свободные места потом в конец(экономия места используем весь банк ключей)
-                    if (not _Controller.KeyIndexInController):
-                        self.ControllerApi.Add_Cart(cart["card"])
+                    # Если у нас не удалялись
+                    # до этого карты то добавляем карты в конец
+                    # Иначе сначала в свободные места
+                    # потом в конец(экономия места используем весь банк ключей)
+                    if not controller.key_index_in_controller:
+                        self.controller_api.add_cart(cart["card"])
                     else:
-                        self.ControllerApi.Add_Cart_Index(
-                            cart["card"], _Controller.KeyIndexInController)
-                        _Controller.KeyIndexInController.pop()
+                        self.controller_api.add_cart_index(
+                            cart["card"], controller.key_index_in_controller)
+                        controller.key_index_in_controller.pop()
                 answer = {
                     "id": body["id"],
                     "success ": len(body["cards"])
@@ -105,34 +113,35 @@ class ConverterInstance:
                 return answer
 
             # Удаление карточек
-            if (body['operation'] == "del_cards"):
+            if body['operation'] == "del_cards":
                 # Пробежать по всем переданным карточкам и произвести из экзекуцию
                 for cart in body["cards"]:
-                    _Controller._rawKeyIndexInController.append(
-                        self.ControllerApi.Delete_Cart(cart["card"]))
+                    controller.raw_key_index_in_controller.append(
+                        self.controller_api.delete_cart(cart["card"]))
 
                 # Сбор данных о удалённых ключах
-                for _IndexIn_Controller in _Controller._rawKeyIndexInController:
-                    index = _IndexIn_Controller.contents.value
+                for _index_in_controller in controller.raw_key_index_in_controller:
+                    index = _index_in_controller.contents.value
                     if (index != -1):
-                        _Controller.KeyIndexInController.append(int(index))
+                        controller.key_index_in_controller.append(int(index))
 
-                _Controller._rawKeyIndexInController.clear()
+                controller.raw_key_index_in_controller.clear()
 
                 answer = {
                     "id": body["id"],
                     "success ": len(body["cards"]),
-                    "indexDeletedCarts": _Controller.KeyIndexInController,
+                    "indexDeletedCarts": controller.key_index_in_controller,
 
                 }
                 return answer
             # Запрос на карточки которые находятся в контролере
-            if (body['operation'] == "read_cards"):
-                self.ControllerApi.Update_Bank_Key(
-                    _Controller.Banks)
-                answer = self.ControllerApi.GetAllKeyInControllerJson()
-                print("\n\n\n+++++++++++++++++++++\n", sn)
-                print(answer)
+            if body['operation'] == "read_cards":
+                self.controller_api.update_bank_key(
+                    controller.Banks)
+                controller.key_index_in_controller = self.controller_api.get_all_key_in_controller_json()
+                # print("\n\n\n+++++++++++++++++++++\n", serial_number)
+                # print(answer)
                 # if (not len(answer['cards']) == 0):
-                _Controller.KeysInController = answer
-                return answer
+                return controller.key_index_in_controller
+
+        return None
