@@ -115,7 +115,7 @@ class IronLogicControllerApi:
         self.__lib_dll_init_converter.argtypes = []
         ###########################################################
 
-        self.__lib_dll_init_converter()  # Загрузка dll
+        # self.__lib_dll_init_converter()  # Загрузка dll
 
         ###########################################################
         # Загрузка из DLL функции char* DllStrAllControllerEventsJson()
@@ -223,7 +223,7 @@ class IronLogicControllerApi:
         Returns:
             INT: Код результата выполнения функции
         '''
-        self.__lib_dll_change_context_controller(index_controller)
+        # self.__lib_dll_change_context_controller(index_controller)
 
     def do_show_new_events(self, index_event_in_controller: int):
         '''
@@ -235,7 +235,8 @@ class IronLogicControllerApi:
         Returns:
             INT: Возвращает индекс последнего прочитанного событие в контролере
         '''
-        return self.__lib_dll_do_show_new_events(index_event_in_controller)
+        # return self.__lib_dll_do_show_new_events(index_event_in_controller)
+        return 11
 
     def update_bank_key(self, index_bank: int):
         '''
@@ -247,7 +248,7 @@ class IronLogicControllerApi:
         Returns:
             void:
         '''
-        self.__lib_dll_update_bank_key(index_bank)
+        # self.__lib_dll_update_bank_key(index_bank)
 
     def do_ctr_events_menu(self, _ctr_addr: int, last_event_index_in_controller: int):
         '''
@@ -260,7 +261,8 @@ class IronLogicControllerApi:
         Returns:
             INT: Возвращает индекс последнего прочитанного событие в контролере
         '''
-        return self.__lib_dll_do_ctr_events_menu(_ctr_addr, last_event_index_in_controller)
+        return 1
+        # return self.__lib_dll_do_ctr_events_menu(_ctr_addr, last_event_index_in_controller)
 
     def open_door(self, side_lock: int):
         '''
@@ -272,7 +274,7 @@ class IronLogicControllerApi:
         Returns:
             void:
         '''
-        self.__lib_dll_open_door(side_lock)
+        # self.__lib_dll_open_door(side_lock)
 
     def add_cart(self, cart: str):
         '''
@@ -284,8 +286,8 @@ class IronLogicControllerApi:
         Returns:
             void:
         '''
-        dirt_string_cart = cart.encode()
-        self.__lib_dll_add_cart(dirt_string_cart)
+        # dirt_string_cart = cart.encode()
+        # self.__lib_dll_add_cart(dirt_string_cart)
 
     def add_cart_index(self, cart: str, index: list):
         '''
@@ -297,9 +299,9 @@ class IronLogicControllerApi:
         Returns:
             void:
         '''
-        dirt_string_cart = cart.encode()
-        array = (ctypes.c_int * len(index))(*index)
-        self.__lib_dll_add_cart_index(dirt_string_cart, array, len(index))
+        # dirt_string_cart = cart.encode()
+        # array = (ctypes.c_int * len(index))(*index)
+        # self.__lib_dll_add_cart_index(dirt_string_cart, array, len(index))
 
     def delete_cart(self, cart: str):
         '''
@@ -311,10 +313,10 @@ class IronLogicControllerApi:
         Returns:
             void:
         '''
-        dirt_string_cart = cart.encode()
-        index_clear_cart = ctypes.POINTER(ctypes.c_int)
-        index_clear_cart = self.__lib_dll_delete_cart(dirt_string_cart)
-        return index_clear_cart
+        # dirt_string_cart = cart.encode()
+        # index_clear_cart = ctypes.POINTER(ctypes.c_int)
+        # index_clear_cart = self.__lib_dll_delete_cart(dirt_string_cart)
+        return 1
 
     def debug_print(self, data, f_colors=HexColors.OKBLUE, b_colors=HexColors.BOLD):
         '''
@@ -338,7 +340,32 @@ class IronLogicControllerApi:
         '''
             Взять события из контролера
         '''
-        data = self.__lib_controller_events_json()
+        # data = self.__lib_controller_events_json()
+        data = '''{
+                    "type": "Z5RWEB",
+                    "sn": 50001,
+                    "messages": [
+                        {
+                        "id": 123456789,
+                        "operation": "events",
+                        "events": [
+                            {
+                            "event": 4,
+                            "card": "00B5009EC1A8",
+                            "time": "2015-06-25 16:36:01",
+                            "flag": 0
+                            },
+                            {
+                            "event": 16,
+                            "card": "00BA00FE32A2",
+                            "time": "2015-06-25 16:36:02",
+                            "flag": 0
+                            }
+                                ]
+                        }         
+                                ]
+                    }
+                    '''.encode("utf-8")
         if data is not None:
             json_data = json.loads(data.decode('utf-8'))
             self.debug_print(str(json_data))
@@ -350,7 +377,32 @@ class IronLogicControllerApi:
         '''
             Взять все события из контролера
         '''
-        data = self.__lib_all_controller_events_json()
+        # data = self.__lib_all_controller_events_json()
+        data = '''{
+            "type": "Z5RWEB",
+            "sn": 50001,
+            "messages": [
+                {
+                "id": 123456789,
+                "operation": "events",
+                "events": [
+                    {
+                    "event": 4,
+                    "card": "00B5009EC1A8",
+                    "time": "2015-06-25 16:36:01",
+                    "flag": 0
+                    },
+                    {
+                    "event": 16,
+                    "card": "00BA00FE32A2",
+                    "time": "2015-06-25 16:36:02",
+                    "flag": 0
+                    }
+                        ]
+                }         
+                        ]
+            }
+            '''.encode("utf-8")
         if data is not None:
             json_data = json.loads(data.decode('utf-8'))
             self.debug_print(str(json_data))
@@ -362,7 +414,30 @@ class IronLogicControllerApi:
         '''
             Взять все ключи из контролера
         '''
-        data = self.__lib_dll_get_bank_key()
+        # data = self.__lib_dll_get_bank_key()
+        data = '''{
+            "type": "Z5RWEB",
+            "sn": 50001,
+            "messages":[
+                            {
+                                "cards":[
+                                    {
+                                    "pos":0,
+                                    "card":"000000DDD2DC",
+                                    "flags":0,
+                                    "tz":255
+                                    },
+                                    {
+                                    "pos":1,
+                                    "card":"000000030201",
+                                    "flags":0,
+                                    "tz":255
+                                    }
+                                        ]
+                            }
+                        ]
+            }
+            '''.encode("utf-8")
         string_data: str = data.decode("utf-8")
         json_data = json.loads(string_data)
         self.debug_print(json_data)
@@ -372,7 +447,23 @@ class IronLogicControllerApi:
         '''
             Взять все индексы ключей из контролера которые были удаленны
         '''
-        data = self.__lib_dll_get_delete_index_key()
+        # data = self.__lib_dll_get_delete_index_key()
+        data = '''{
+                    "cards":[
+                        {
+                        "pos":0,
+                        "card":"000000DDD2DC",
+                        "flags":0,
+                        "tz":255
+                        },
+                        {
+                        "pos":1,
+                        "card":"000000030201",
+                        "flags":0,
+                        "tz":255
+                        }
+                            ]
+                    }'''.encode("utf-8")
         string_data: str = data.decode("utf-8")
         json_data = json.loads(string_data)
         self.debug_print(json_data)
@@ -382,7 +473,7 @@ class IronLogicControllerApi:
         '''
             Взять последний ключ поднесённый к контролеру
         '''
-        data = self.__lib_last_key_get()
+        # data = self.__lib_last_key_get()
         if data is not None:
             json_data = json.loads(data.decode('utf-8'))
             self.debug_print(str(json_data))

@@ -1,12 +1,8 @@
-from contextlib import suppress
 import aiohttp
 from aiohttp import web
 import asyncio
-from ControllerInstance import ControllerInstance
 from ConverterInstance import ConverterInstance
-from IronLogicApiDll import IronLogicControllerApi
-from datetime import datetime
-import time
+from IronLogicApiDllMock import IronLogicControllerApi
 import json
 import threading
 import queue
@@ -26,7 +22,7 @@ class ModeController:
 
 
 # Абстракция один конвертер множество контролеров
-global_сonverter = ConverterInstance('./ControllerIronLogic.dll')
+global_converter = ConverterInstance('./ControllerIronLogic.dll')
 
 # Web - часть
 appController = web.Application()
@@ -77,30 +73,30 @@ def init_middleware():
     ################################################################
     # Создание первого контролера
     ################################################################
-    global_сonverter.add_new_controller(1, 4232, "Z5R Net 8000", 1)
-    global_сonverter.add_new_controller(2, 4225, "Z5R Net 8000", 1)
+    global_converter.add_new_controller(1, 4232, "Z5R Net 8000", 1)
+    global_converter.add_new_controller(2, 4225, "Z5R Net 8000", 1)
     ################################################################
     # Подготовка контролеров
     ################################################################
     # Пробегаем по каждому инициализируем внутренне состояния (dll-кишков)
     # а также смотрим какой последний был индекс события
-    for controller in global_сonverter.arr_controllers:
-        controller.EventsIterator = global_сonverter.controller_api.do_ctr_events_menu(
-            controller.AddressNumber, -1)
-        global_сonverter.controller_api.update_bank_key(controller.Banks)
-        controller.KeysInController = global_сonverter.controller_api.get_all_key_in_controller_json()
+    for controller in global_converter.arr_controllers:
+        controller.EventsIterator = global_converter.controller_api.do_ctr_events_menu(
+            controller.address_number, -1)
+        global_converter.controller_api.update_bank_key(controller.banks)
+        controller.keys_in_controller = global_converter.controller_api.get_all_key_in_controller_json()
 
         ################################################################
         # Собираем информацию по удалённым ключам в контролере
-        index_delete_key = global_сonverter.controller_api.get_delete_index_key_in_controller_json()
+        index_delete_key = global_converter.controller_api.get_delete_index_key_in_controller_json()
         arr_cards = index_delete_key["cards"]
         arr_cards_index = []
         for index in arr_cards:
             arr_cards_index.append(index["pos"])
-        controller.KeyIndexInController = arr_cards_index
+        controller.keys_in_controller = arr_cards_index
         ################################################################
 
-        send_post(urls=BASE_URL, events=controller.POWER_ON())
+        send_post(urls=BASE_URL, events=controller.power_on())
 
 
 ##########################################
@@ -128,7 +124,7 @@ def run_processing_message(message, serial_number):
             break
         for item in items["messages"]:
             print("\n\n\nПерехватил и отправил на обработку сообщение: ", items)
-            response_body = global_сonverter.run_response(items["sn"], item)
+            response_body = global_converter.run_response(items["sn"], item)
             print("ТО что отправлен серверу", response_body)
             # SendPost(urls=BASE_URL, Events=response_body)
 ##########################################
@@ -140,34 +136,34 @@ def main_middleware():
     '''
     # ConverterIronLogic является глобальной
     # переменой для класса используется для синхронизации данных между потоков
-    global global_сonverter
+    global global_converter
 
     while (True):
         try:
             # Пробегаем по каждому контролеру если контролер
             # на данный момент активен переключаем контекст
             # обработки и опрашиваем на новые события
-            for _index, controller in enumerate(global_сonverter.arr_controllers):
+            for _index, controller in enumerate(global_converter.arr_controllers):
 
-                if (controller.Active == ModeController.ACTIVE):
-                    # print("_Controller.SerialNumber= ",_Controller.SerialNumber,
+                if (controller.active == ModeController.ACTIVE):
+                    # print("_Controller.serial_number= ",_Controller.serial_number,
                     #   "_Controller.Active= ",_Controller.Active,
                     #   "not _Controller.Selected= ",not _Controller.Selected)
                     # Если контролер не выбран выбираем
                     # if (not _Controller.Selected):
-                    global_сonverter.controller_api.change_context_controller(
-                        controller.AddressNumber)
-                    global_сonverter.selected_controller_for_operation(
+                    global_converter.controller_api.change_context_controller(
+                        controller.address_number)
+                    global_converter.selected_controller_for_operation(
                         _index)
 
                     run_processing_message(
-                        controller.message_queue_in, controller.SerialNumber)
+                        controller.message_queue_in, controller.serial_number)
 
                     # Проверка на новые события
                     # (проходим по индексам текущий индекс
                     # минус старый индекс равно кол новых событий)
                     old_events_iterator = controller.EventsIterator
-                    controller.EventsIterator = global_сonverter.controller_api.do_show_new_events(
+                    controller.EventsIterator = global_converter.controller_api.do_show_new_events(
                         controller.EventsIterator)
 
                     # Если новый индекс совпадает со старым значит новых событий нет
@@ -175,9 +171,9 @@ def main_middleware():
                         continue
 
                     # Вызываем гетер и берем все событие которые скопились
-                    events = global_сonverter.controller_api.get_controller_events_json()
+                    events = global_converter.controller_api.get_controller_events_json()
 
-                    if controller.LogicMode == ModeController.OFFLINE:
+                    if controller.logic_mode == ModeController.OFFLINE:
                         for messages in events["messages"]:
                             # Если у нас массив сообщений не пустой тогда отправим эти данные
                             if messages["events"] != []:
@@ -188,12 +184,12 @@ def main_middleware():
                         continue
 
                     # Работа через двух факторный режим блокируем и потом открываем дверь
-                    if (controller.LogicMode == ModeController.ONLINE):
+                    if (controller.logic_mode == ModeController.ONLINE):
                         for messages in events["messages"]:
                             if messages["events"] != []:
                                 check_access = {
                                     "type": events["type"],
-                                    "sn": controller.SerialNumber,
+                                    "sn": controller.serial_number,
                                     "messages": [
                                         {
                                             "id": 1,
@@ -205,7 +201,7 @@ def main_middleware():
                                 }
                                 controller.ReaderSide = messages["events"][0]["direct"]
                                 send_post(urls=BASE_URL,
-                                         events=check_access)
+                                          events=check_access)
         except queue.Empty:
             continue
 
@@ -218,7 +214,7 @@ def run_response(body: any):
     '''
     # ConverterIronLogic является глобальной переменой
     # для класса используется для синхронизации данных между потоков
-    global global_сonverter
+    global global_converter
 
     response_body = {
         "id": 123456789,
@@ -228,15 +224,15 @@ def run_response(body: any):
     for message in body["messages"]:
         ################################################################
         # Если серийник с таким то номером то совершаем некоторые действия
-        for controller in global_сonverter.arr_controllers:
+        for controller in global_converter.arr_controllers:
             # Если серийник не совпадает с адресом который был в запросе то пропускаем итерацию
-            if (body["sn"] != controller.SerialNumber):
+            if (body["sn"] != controller.serial_number):
                 continue
 
             # Активация контролера
             if (message['operation'] == "set_active"):
-                controller.Active = message["active"]
-                controller.LogicMode = message["online"]
+                controller.active = message["active"]
+                controller.logic_mode = message["online"]
                 response_body = {
                     "id": 123456789,
                     "success ": 1
@@ -244,7 +240,7 @@ def run_response(body: any):
                 return response_body
             # Установка режима контролера(перепроверить возможно что то сломано)
             if (message['operation'] == "set_mode"):
-                controller.LogicMode = message["mode"]
+                controller.logic_mode = message["mode"]
                 response_body = {
                     "id": 123456789,
                     "success ": 1
@@ -254,33 +250,35 @@ def run_response(body: any):
             # if (message['operation'] == "read_cards"):
             #     # if (not _Controller.Selected):
             #     ConverterIronLogic.ControllerApi.Change_Context_Controller(
-            #         _Controller.AddressNumber)
+            #         _controller.address_number)
             #     # ConverterIronLogic.SelectedControllerForOperation(_index)
             #     ConverterIronLogic.ControllerApi.Update_Bank_Key(
-            #         _Controller.Banks)
+            #         _controller.banks)
             #     answer = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
-            #     _Controller.KeysInController = answer
+            #     _controller.keys_in_controller = answer
             #     response_body = answer
             #     # return answer
 
             # Формируем пакет сообщений
             send_message(controller.message_queue_in, body)
-            # Заканчиваем (ставим разделитель)на пакет сообщений
             send_message(controller.message_queue_in, None)
-            
-            if message['operation'] == "read_cards":
-                # Проверяем наличие данных в очереди
-                if not controller.message_queue_out.empty():
-                    print("Сообщений нет, контролер => интернет ", controller.serial_number)
+            # Заканчиваем (ставим разделитель)на пакет сообщений
 
-                while not message.message_queue_out.empty():
-                    items = message.message_queue_out.get()
-                    if items is None:
-                        print("Сообщения закончились, контролер => интернет = >", controller.serial_number)
-                        break
-                    print("ТО что отправлен серверу", items)
-                    return items
-                
+            if message['operation'] == "read_cards":
+                # while not controller.message_queue_out.empty():
+                while True:
+                    if not controller.message_queue_out.empty():
+                        print("Жду")
+                        items = controller.message_queue_out.get()                        
+                        if items is None:
+                            print(
+                                "Сообщения закончились, контролер => интернет = >", controller.serial_number)
+                            break
+                        else:
+                            response_body = items
+
+        # send_message(controller.message_queue_in, None)
+
     return response_body
 
 
@@ -314,7 +312,7 @@ def start_service():
 
     def run_app_thread():
         app.add_routes([web.get('/', mock)])
-        web.run_app(host="192.168.0.34", port=8080, app=app)
+        web.run_app(host="127.0.0.1", port=8080, app=app)
 
     threads = (
         threading.Thread(target=run_controller_thread),

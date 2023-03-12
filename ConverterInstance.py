@@ -1,4 +1,4 @@
-from IronLogicApiDll import IronLogicControllerApi
+from IronLogicApiDllMock import IronLogicControllerApi
 from ControllerInstance import ControllerInstance
 
 
@@ -137,12 +137,15 @@ class ConverterInstance:
             # Запрос на карточки которые находятся в контролере
             if body['operation'] == "read_cards":
                 self.controller_api.update_bank_key(
-                    controller.Banks)
+                    controller.banks)
                 controller.key_index_in_controller = self.controller_api.get_all_key_in_controller_json()
                 # print("\n\n\n+++++++++++++++++++++\n", serial_number)
                 # print(answer)
                 # if (not len(answer['cards']) == 0):
+                # print("controller.message_queue_out=> ",controller.message_queue_out.queue.len())
                 controller.message_queue_out.put(controller.key_index_in_controller)
+                controller.message_queue_out.put(None)
+                print("controller.message_queue_out=> ",controller.message_queue_out.queue)
                 return controller.key_index_in_controller
 
         return None
