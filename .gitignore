@@ -3,3 +3,6 @@ ControllerIronLogic.lib
 ControllerIronLogic.pdb
 .venv
 .vscode
+build
+.vscode
+__pycache__

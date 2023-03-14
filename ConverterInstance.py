@@ -1,4 +1,4 @@
-from IronLogicApiDllMock import IronLogicControllerApi
+from IronLogicApiDll import IronLogicControllerApi
 from ControllerInstance import ControllerInstance
 
 
