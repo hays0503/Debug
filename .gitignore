@@ -3,3 +3,6 @@ ControllerIronLogic.lib
 ControllerIronLogic.pdb
 .venv
 .vscode
+IronLogicVenv
+output
+.gitignore

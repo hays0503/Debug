@@ -1,8 +1,11 @@
+import sys
+import ctypes
+import os
 import aiohttp
 from aiohttp import web
 import asyncio
 from ConverterInstance import ConverterInstance
-from IronLogicApiDllMock import IronLogicControllerApi
+from IronLogicApiDll import IronLogicControllerApi
 import json
 import threading
 import queue
@@ -22,7 +25,7 @@ class ModeController:
 
 
 # Абстракция один конвертер множество контролеров
-global_converter = ConverterInstance('./ControllerIronLogic.dll')
+global_converter = None
 
 # Web - часть
 appController = web.Application()
@@ -56,6 +59,7 @@ def send_post(urls, events):
         Отправка данных на удалённый сервер
     '''
     try:
+        print("Отправка данных на удалённый сервер => ", events)
         asyncio.run(get_http_response(
             urls=urls, events=events))
     except Exception as e:
@@ -69,12 +73,18 @@ def init_middleware():
     '''
         Инициализируем внутренее состояние
     '''
-
+    global global_converter
+    # Абстракция один конвертер множество контролеров
+    global_converter = ConverterInstance(os.path.dirname(
+        __file__)+"\\ControllerIronLogic.dll", "COM3")
     ################################################################
     # Создание первого контролера
     ################################################################
-    global_converter.add_new_controller(1, 4232, "Z5R Net 8000", 1)
-    global_converter.add_new_controller(2, 4225, "Z5R Net 8000", 1)
+    # global_converter.add_new_controller(1, 4232, "Z5R Net 8000", 1)
+    # global_converter.add_new_controller(2, 4225, "Z5R Net 8000", 1)
+    global_converter.add_new_controller(2, 4779, "Z5R Net 8000", 1)
+    global_converter.add_new_controller(3, 37441, "Z5R Net 2000", 1)
+    global_converter.add_new_controller(4, 44624, "Z5R Net 2000", 1)
     ################################################################
     # Подготовка контролеров
     ################################################################
@@ -93,7 +103,7 @@ def init_middleware():
         arr_cards_index = []
         for index in arr_cards:
             arr_cards_index.append(index["pos"])
-        controller.keys_in_controller = arr_cards_index
+        controller.key_index_in_controller = arr_cards_index
         ################################################################
 
         send_post(urls=BASE_URL, events=controller.power_on())
@@ -114,8 +124,8 @@ def run_processing_message(message, serial_number):
         Функция для обработки сообщений в очередь
     '''
     # Проверяем наличие данных в очереди
-    if not message.empty():
-        print("Сообщений нет, контролер = >", serial_number)
+    # if not message.empty():
+    #     print("Сообщений нет, контролер = >", serial_number)
 
     while not message.empty():
         items = message.get()
@@ -123,9 +133,9 @@ def run_processing_message(message, serial_number):
             print("Сообщения закончились, контролер = >", serial_number)
             break
         for item in items["messages"]:
-            print("\n\n\nПерехватил и отправил на обработку сообщение: ", items)
+            # print("\n\n\nПерехватил и отправил на обработку сообщение: ", items)
             response_body = global_converter.run_response(items["sn"], item)
-            print("ТО что отправлен серверу", response_body)
+            # print("ТО что отправлен серверу", response_body)
             # SendPost(urls=BASE_URL, Events=response_body)
 ##########################################
 
@@ -151,6 +161,7 @@ def main_middleware():
                     #   "not _Controller.Selected= ",not _Controller.Selected)
                     # Если контролер не выбран выбираем
                     # if (not _Controller.Selected):
+
                     global_converter.controller_api.change_context_controller(
                         controller.address_number)
                     global_converter.selected_controller_for_operation(
@@ -185,6 +196,8 @@ def main_middleware():
 
                     # Работа через двух факторный режим блокируем и потом открываем дверь
                     if (controller.logic_mode == ModeController.ONLINE):
+                        # print(
+                        #     "Работа через двух факторный режим блокируем и потом открываем дверь| sn = ", controller.serial_number)
                         for messages in events["messages"]:
                             if messages["events"] != []:
                                 check_access = {
@@ -200,6 +213,8 @@ def main_middleware():
                                     ]
                                 }
                                 controller.ReaderSide = messages["events"][0]["direct"]
+                                # print(
+                                #     "Отправляю на удалённый сервер информацию = ", check_access)
                                 send_post(urls=BASE_URL,
                                           events=check_access)
         except queue.Empty:
@@ -247,18 +262,6 @@ def run_response(body: any):
                 }
                 return response_body
 
-            # if (message['operation'] == "read_cards"):
-            #     # if (not _Controller.Selected):
-            #     ConverterIronLogic.ControllerApi.Change_Context_Controller(
-            #         _controller.address_number)
-            #     # ConverterIronLogic.SelectedControllerForOperation(_index)
-            #     ConverterIronLogic.ControllerApi.Update_Bank_Key(
-            #         _controller.banks)
-            #     answer = ConverterIronLogic.ControllerApi.GetAllKeyInControllerJson()
-            #     _controller.keys_in_controller = answer
-            #     response_body = answer
-            #     # return answer
-
             # Формируем пакет сообщений
             send_message(controller.message_queue_in, body)
             send_message(controller.message_queue_in, None)
@@ -266,18 +269,22 @@ def run_response(body: any):
 
             if message['operation'] == "read_cards":
                 # while not controller.message_queue_out.empty():
+
                 while True:
                     if not controller.message_queue_out.empty():
-                        print("Жду")
-                        items = controller.message_queue_out.get()                        
+                        # print("Жду")
+                        # print("controller.message_queue_out=> ",
+                        #       controller.message_queue_out)
+                        items = controller.message_queue_out.get()
                         if items is None:
                             print(
                                 "Сообщения закончились, контролер => интернет = >", controller.serial_number)
                             break
                         else:
-                            response_body = items
-
-        # send_message(controller.message_queue_in, None)
+                            response_body = {
+                                "type": controller.name_controller,
+                                "sn": controller.serial_number,
+                                "messages": [items]}
 
     return response_body
 
@@ -292,7 +299,7 @@ def start_service():
         # Обработчик входящих подключений
         body = await request.json()
 
-        print("body=>", body)
+        print("Принял сообщение=>", body)
 
         # пустое сообщение обрабатываем
         if len(body['messages']) == 0:
@@ -326,4 +333,6 @@ def start_service():
 
 
 if __name__ == '__main__':
+    # win32api.SetDllDirectory(sys._MEIPASS)
+    # ctypes.windll.kernel32.SetDllDirectoryW(None)
     start_service()

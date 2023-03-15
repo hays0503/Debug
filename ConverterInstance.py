@@ -1,4 +1,4 @@
-from IronLogicApiDllMock import IronLogicControllerApi
+from IronLogicApiDll import IronLogicControllerApi
 from ControllerInstance import ControllerInstance
 
 
@@ -19,12 +19,12 @@ class ConverterInstance:
     # Запущенна задача в контролере
     run_task_in_controller = False
 
-    def __init__(self, patch_to_dll: str):
+    def __init__(self, patch_to_dll: str, com_address: str):
         '''
             @arg
                 patch_to_dll : str путь др dll
         '''
-        self.controller_api = IronLogicControllerApi(patch_to_dll)
+        self.controller_api = IronLogicControllerApi(patch_to_dll, com_address)
 
     # Устанавливает в флаг что над этим контролером
     # в данный момент ведётся работа а с других этот флаг снимается
@@ -84,6 +84,7 @@ class ConverterInstance:
                 return answer
             # Ответ на check_access
             if body['operation'] == "check_access":
+                print("body['granted'] ", body['granted'])
                 if body['granted'] == 1:
                     self.controller_api.open_door(
                         int(controller.reader_side))
@@ -111,7 +112,15 @@ class ConverterInstance:
                     "success ": len(body["cards"])
                 }
                 return answer
-
+            # Удаление всех карточек
+            if body['operation'] == "clear_cards":
+                self.controller_api.delete_all_cart()
+                controller.key_index_in_controller.clear()
+                answer = {
+                    "id": body["id"],
+                    "success ": 1
+                }
+                return answer
             # Удаление карточек
             if body['operation'] == "del_cards":
                 # Пробежать по всем переданным карточкам и произвести из экзекуцию
@@ -122,6 +131,10 @@ class ConverterInstance:
                 # Сбор данных о удалённых ключах
                 for _index_in_controller in controller.raw_key_index_in_controller:
                     index = _index_in_controller.contents.value
+                    # print("_index_in_controller.contents.value   ",
+                    #       _index_in_controller.contents.value)
+                    # print("controller.key_index_in_controller    ",
+                    #       controller.key_index_in_controller)
                     if (index != -1):
                         controller.key_index_in_controller.append(int(index))
 
@@ -138,14 +151,15 @@ class ConverterInstance:
             if body['operation'] == "read_cards":
                 self.controller_api.update_bank_key(
                     controller.banks)
-                controller.key_index_in_controller = self.controller_api.get_all_key_in_controller_json()
+                controller.keys_in_controller = self.controller_api.get_all_key_in_controller_json()
                 # print("\n\n\n+++++++++++++++++++++\n", serial_number)
-                # print(answer)
-                # if (not len(answer['cards']) == 0):
-                # print("controller.message_queue_out=> ",controller.message_queue_out.queue.len())
-                controller.message_queue_out.put(controller.key_index_in_controller)
+                controller.message_queue_out.put(
+                    controller.keys_in_controller)
                 controller.message_queue_out.put(None)
-                print("controller.message_queue_out=> ",controller.message_queue_out.queue)
-                return controller.key_index_in_controller
+                # print("controller.message_queue_out=> ",
+                #       controller.message_queue_out)
+                # print("controller.message_queue_out=> ",
+                #       controller.message_queue_out.queue)
+                return controller.keys_in_controller
 
         return None

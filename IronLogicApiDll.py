@@ -95,27 +95,32 @@ class IronLogicControllerApi:
     ###########################################################
 
     ###########################################################
+    # доступ до dll функции удаляет карточку в выбранный контролер
+    __lib_dll_all_delete_cart = None
+    ###########################################################
+
+    ###########################################################
     # доступ до dll функции взять из выбранного контролера все ключи которые пометили как удалённые
     __lib_dll_get_delete_index_key = None
     ###########################################################
 
 ####################################################################################################
 
-    def __init__(self, patch_to_dll: str) -> bool:
+    def __init__(self, patch_to_dll: str, com_address: str) -> bool:
         # Вызвали конструктор класса без корректных аргументов
-        if not isinstance(patch_to_dll,str):
+        if not isinstance(patch_to_dll, str):
             raise ValueError("Путь до dll не найден")
         # Загрузка Dll
-        self.__lib = ctypes.CDLL(patch_to_dll)
+        self.__lib = ctypes.WinDLL(patch_to_dll)
 
         ###########################################################
         # Загрузка из DLL функции void DllInitConverter()
         self.__lib_dll_init_converter = self.__lib.DllInitConverter
         self.__lib_dll_init_converter.restype = ctypes.c_bool
-        self.__lib_dll_init_converter.argtypes = []
+        self.__lib_dll_init_converter.argtypes = [ctypes.c_char_p]
         ###########################################################
-
-        self.__lib_dll_init_converter()  # Загрузка dll
+        dirt_com_address = com_address.encode()
+        self.__lib_dll_init_converter(dirt_com_address)  # Загрузка dll
 
         ###########################################################
         # Загрузка из DLL функции char* DllStrAllControllerEventsJson()
@@ -205,6 +210,13 @@ class IronLogicControllerApi:
         ###########################################################
 
         ###########################################################
+        # Загрузка из Dll функции void DllClearBank
+        self.__lib_dll_all_delete_cart = self.__lib.DllClearBank
+        self.__lib_dll_all_delete_cart.restype = ctypes.c_void_p
+        self.__lib_dll_all_delete_cart.argtypes = []
+        ###########################################################
+
+        ###########################################################
         # Загрузка из DLL функции const char* DllGetDeleteIndexKey()
         self.__lib_dll_get_delete_index_key = self.__lib.DllGetDeleteIndexKey
         self.__lib_dll_get_delete_index_key.restype = ctypes.c_char_p
@@ -286,6 +298,15 @@ class IronLogicControllerApi:
         '''
         dirt_string_cart = cart.encode()
         self.__lib_dll_add_cart(dirt_string_cart)
+
+    def delete_all_cart(self):
+        '''
+        Удалить все карточки в контролер который были
+
+        Returns:
+            void:
+        '''
+        self.__lib_dll_all_delete_cart()
 
     def add_cart_index(self, cart: str, index: list):
         '''
