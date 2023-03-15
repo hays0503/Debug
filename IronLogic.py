@@ -6,9 +6,44 @@ from aiohttp import web
 import asyncio
 from ConverterInstance import ConverterInstance
 from IronLogicApiDll import IronLogicControllerApi
+from IronLogicApiDll import IronLogicControllerApi
 import json
 import threading
 import queue
+
+
+# class MainWindow(QMainWindow):
+
+#     def __init__(self):
+#         super(MainWindow, self).__init__()
+
+#         self.setWindowTitle("My App")
+
+#         self.list_widget = QListWidget()
+#         self.list_widget.addItems(["One", "Two", "Three"])
+#         self.list_widget1 = QListWidget()
+#         self.list_widget1.addItems(["One123", "Two321", "Three1515"])
+
+#         # In QListWidget there are two separate signals for the item, and the str
+#         self.list_widget.currentItemChanged.connect(self.index_changed)
+#         self.list_widget.currentTextChanged.connect(self.text_changed)
+
+#         layout = QHBoxLayout()
+#         layout.addWidget(self.list_widget)
+#         layout.addWidget(self.list_widget1)
+
+#         widget = QWidget()
+#         widget.setLayout(layout)
+#         self.setCentralWidget(widget)
+
+#     def add_string(self, string: str):
+#         self.list_widget.addItem(string)
+
+#     def index_changed(self, i):  # Not an index, i is a QListWidgetItem
+#         print(i.text())
+
+#     def text_changed(self, s):  # s is a str
+#         print(s)
 
 
 class ModeController:
@@ -293,7 +328,9 @@ def start_service():
     '''
         Точка входа в программу запуск сервиса обработки
     '''
+
     ################## Обработчик входящих подключений ##################################
+
     async def mock(request):
         #########################################
         # Обработчик входящих подключений
@@ -318,6 +355,11 @@ def start_service():
         appController.cleanup_ctx.append(main_middleware())
 
     def run_app_thread():
+        # qt_app = QApplication(sys.argv)
+        # window = MainWindow()
+        # window.add_string("123123123123123")
+        # window.show()
+        # qt_app.exec_()
         app.add_routes([web.get('/', mock)])
         web.run_app(host="127.0.0.1", port=8080, app=app)
 
@@ -329,8 +371,8 @@ def start_service():
     for tread in threads:
         tread.start()
 
-#####################################################################################
 
+#####################################################################################
 
 if __name__ == '__main__':
     # win32api.SetDllDirectory(sys._MEIPASS)

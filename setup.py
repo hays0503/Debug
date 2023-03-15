@@ -1,14 +1,18 @@
 from cx_Freeze import setup, Executable
+import os
 
-setup(
-    name="your_app_name",
-    version="1.0",
-    description="Your application description",
-    executables=[Executable("IronLogic.py")],
-    options={
-        "build_exe": {
-            "includes": ["aiohttp","aiosignal","async-timeout","attrs","charset-normalizer","frozenlist","idna","multidict","yarl"],
-            "include_files": ["ControllerIronLogic.dll", "ZGuard.dll"]
-        }
-    }
-)
+# Dependencies are automatically detected, but it might need fine tuning.
+# build_exe_options = {"packages": ["os"], "excludes": [
+#     "tkinter"]}
+
+# GUI applications require a different base on Windows (the default is for a
+# console application).
+base = None
+# if sys.platform == "win32":
+#     base = "Win32GUI"
+
+setup(name="ЭмуляторСетевыхКонтролеров IronLogic",
+      version="0.1",
+      description="ЭмуляторСетевыхКонтролеров IronLogic",
+    #   options={"build_exe": build_exe_options},
+      executables=[Executable("IronLogic.py", base=base)])
